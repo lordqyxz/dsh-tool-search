@@ -43,7 +43,7 @@ alwaysVisible is a replacement list: keep the defaults when extending it.
 
 ## Efficiency / 效率对比
 
-方法：120 个合成工具（12 领域 × 10 操作）的真实 JSON Schema，全部指标由 `buildCatalog` / `searchTools` 实测，非估算。基线 = 全量 Schema 常驻；对比 = 目录区常驻 + 按需搜索。
+方法：120 个合成工具（12 领域 × 10 操作）的真实 JSON Schema。基线 = 全量 Schema 常驻；对比 = 目录区常驻 + 按需搜索。
 
 | Tools | 基线 tok/请求 | 插件 tok/请求 | 常驻节省 | 单次搜索 tok | 回本搜索次数 | Top-1（名称） | R@5（同义改写） | 搜索延迟 |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -52,10 +52,10 @@ alwaysVisible is a replacement list: keep the defaults when extending it.
 | 60 | 7347 | 1820 | 75.2% | 756 | 1 | 100% | 100% | 454 µs |
 | 120 | 14632 | 3417 | 76.6% | 756 | 1 | 100% | 100% | 986 µs |
 
+<sub>基准：[bench/run-benchmark.mjs](bench/run-benchmark.mjs) · 回归守护：[tests/efficiency.spec.ts](tests/efficiency.spec.ts) · 复现：`pnpm run bench`</sub>
+
 - **1 次搜索即回本**：省下的常驻开销一次搜索就覆盖其自身成本，此后每次请求持续净省。
 - **质量**：精确名称查询全部排第一；不含名称词的同义改写查询 100% 命中 Top-5。
-- 回归守护：`tests/efficiency.spec.ts` 锁定节省率 ≥70%、回本 ≤2 次、命中率 ≥95%。
-- 复现：`pnpm run bench`（代码见 [bench/](bench/)）。
 
 ## Development
 
