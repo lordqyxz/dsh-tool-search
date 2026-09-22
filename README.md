@@ -41,6 +41,22 @@ The reserved run_code transport stays exempt from deferral and the guard.
 
 alwaysVisible is a replacement list: keep the defaults when extending it.
 
+## Efficiency / 效率对比
+
+方法：120 个合成工具（12 领域 × 10 操作）的真实 JSON Schema，全部指标由 `buildCatalog` / `searchTools` 实测，非估算。基线 = 全量 Schema 常驻；对比 = 目录区常驻 + 按需搜索。
+
+| Tools | 基线 tok/请求 | 插件 tok/请求 | 常驻节省 | 单次搜索 tok | 回本搜索次数 | Top-1（名称） | R@5（同义改写） | 搜索延迟 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 15 | 1849 | 596 | 67.8% | 755 | 1 | 100% | 100% | 108 µs |
+| 30 | 3706 | 1025 | 72.3% | 756 | 1 | 100% | 100% | 213 µs |
+| 60 | 7347 | 1820 | 75.2% | 756 | 1 | 100% | 100% | 454 µs |
+| 120 | 14632 | 3417 | 76.6% | 756 | 1 | 100% | 100% | 986 µs |
+
+- **1 次搜索即回本**：省下的常驻开销一次搜索就覆盖其自身成本，此后每次请求持续净省。
+- **质量**：精确名称查询全部排第一；不含名称词的同义改写查询 100% 命中 Top-5。
+- 回归守护：`tests/efficiency.spec.ts` 锁定节省率 ≥70%、回本 ≤2 次、命中率 ≥95%。
+- 复现：`pnpm run bench`（代码见 [bench/](bench/)）。
+
 ## Development
 
 ```bash
@@ -48,6 +64,7 @@ pnpm install          # pnpm 11, Node 22.19+ or 24+
 pnpm run typecheck    # tsc --noEmit
 pnpm run lint         # oxlint src tests
 pnpm run test         # vitest run
+pnpm run bench        # build + efficiency benchmark
 pnpm run build        # tsc -> lib/
 pnpm run check        # typecheck + lint + test + build
 ```

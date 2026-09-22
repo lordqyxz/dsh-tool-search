@@ -23,6 +23,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "oxlint src tests",
     "test": "vitest run",
+    "bench": "pnpm run build && node bench/run-benchmark.mjs",
     "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build",
     "prepare": "pnpm run build"
   },
