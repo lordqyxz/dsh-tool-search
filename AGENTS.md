@@ -18,7 +18,7 @@ dsh-tool-search is a DeepSeek Harness (DSH) plugin providing vendor-style deferr
 
 ## Commands
 
-Supported host core baseline: 0.1.6-alpha.2. Core peers are pinned; do not broaden without a compatibility run. Dependency duplication across release lines breaks cordis Context augmentation under skipLibCheck:false — pin overrides in pnpm-workspace.yaml.
+Supported host core baseline: 0.2.0-rc.1. Core peers are pinned; do not broaden without a compatibility run. Dependency duplication across release lines breaks cordis Context augmentation under skipLibCheck:false — keep the release-line overrides in pnpm-workspace.yaml aligned with the active DSH release.
 
     pnpm install          # pnpm 11, Node 22.19+ or 24+
     pnpm run typecheck    # tsc --noEmit
