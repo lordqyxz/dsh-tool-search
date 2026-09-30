@@ -7,6 +7,8 @@ export const DEFAULT_THRESHOLD = 15
 export const DEFAULT_MAX_RESULTS = 5
 
 export const DEFAULT_REQUIRE_DISCOVERY = true
+/** Upper bound on tools declared after discovery; oldest discoveries yield first. */
+export const DEFAULT_MAX_DISCOVERED = 20
 export const DEFAULT_CHARACTERS_PER_TOKEN = 4
 /** Per-tool description cap in the resident catalog section, in characters. */
 export const DEFAULT_DESCRIPTION_CHARS = 110

@@ -19,6 +19,7 @@ import {
   DEFAULT_CHARACTERS_PER_TOKEN,
   DEFAULT_DEFER_TOOL_GUIDANCE,
   DEFAULT_DESCRIPTION_CHARS,
+  DEFAULT_MAX_DISCOVERED,
   DEFAULT_MAX_RESULTS,
   DEFAULT_REQUIRE_DISCOVERY,
   DEFAULT_THRESHOLD,
@@ -50,6 +51,8 @@ export interface Config {
   readonly threshold?: number
   /** Maximum full definitions returned by one search. */
   readonly maxResults?: number
+  /** Upper bound on tools declared after discovery; oldest discoveries yield first. */
+  readonly maxDiscovered?: number
   /** Require a successful search before a deferred tool can be called directly. */
   readonly requireDiscovery?: boolean
   /** Schema characters represented by one estimated token. */
@@ -65,6 +68,7 @@ export const Config = z.object({
   alwaysVisible: z.array(z.string()).default([...DEFAULT_ALWAYS_VISIBLE]),
   threshold: z.number().default(DEFAULT_THRESHOLD),
   maxResults: z.number().default(DEFAULT_MAX_RESULTS),
+  maxDiscovered: z.number().default(DEFAULT_MAX_DISCOVERED),
   requireDiscovery: z.boolean().default(DEFAULT_REQUIRE_DISCOVERY),
   charactersPerToken: z.number().default(DEFAULT_CHARACTERS_PER_TOKEN),
   descriptionChars: z.number().default(DEFAULT_DESCRIPTION_CHARS),
@@ -88,15 +92,35 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
   const toolName = nonEmpty(config.toolName ?? DEFAULT_TOOL_NAME, 'toolName')
   const alwaysVisible = (config.alwaysVisible ?? DEFAULT_ALWAYS_VISIBLE)
     .map((pattern, index) => nonEmpty(pattern, 'alwaysVisible[' + String(index) + ']'))
+  const maxResults = integer(config.maxResults ?? DEFAULT_MAX_RESULTS, 'maxResults', 1)
   return {
     toolName,
     alwaysVisible,
     threshold: integer(config.threshold ?? DEFAULT_THRESHOLD, 'threshold', 1),
-    maxResults: integer(config.maxResults ?? DEFAULT_MAX_RESULTS, 'maxResults', 1),
+    maxResults,
+    // One search contributes at most maxResults names, so a cap below that
+    // could evict names the current result just told the model to call; floor
+    // the configured cap instead of rejecting it.
+    maxDiscovered: Math.max(
+      maxResults,
+      integer(config.maxDiscovered ?? DEFAULT_MAX_DISCOVERED, 'maxDiscovered', 1),
+    ),
     requireDiscovery: config.requireDiscovery ?? DEFAULT_REQUIRE_DISCOVERY,
     charactersPerToken: integer(config.charactersPerToken ?? DEFAULT_CHARACTERS_PER_TOKEN, 'charactersPerToken', 1),
     descriptionChars: integer(config.descriptionChars ?? DEFAULT_DESCRIPTION_CHARS, 'descriptionChars', 20),
     deferToolGuidance: config.deferToolGuidance ?? DEFAULT_DEFER_TOOL_GUIDANCE,
+  }
+}
+
+/**
+ * Drop the oldest discoveries until the set fits the cap. Iteration order is
+ * insertion order, so the newest names - including everything the current
+ * search just returned - survive when the cap is at least maxResults.
+ */
+function clampDiscovered(discovered: Set<string>, cap: number): void {
+  for (const name of discovered) {
+    if (discovered.size <= cap) return
+    discovered.delete(name)
   }
 }
 
@@ -280,6 +304,10 @@ export function apply(ctx: Context, input: Config): void {
       if (nested === undefined || nested.name !== config.toolName) continue
       for (const name of discoveredFromValue(textContentValue(nested.content)) ?? []) state.discovered.add(name)
     }
+    // Cumulative meta lists are sorted alphabetically rather than in discovery
+    // order, so the clamp approximates recency on resume; a re-search refreshes
+    // anything evicted here.
+    clampDiscovered(state.discovered, config.maxDiscovered)
   }
 
   const rebuildCatalog = (state: AgentState): void => {
@@ -372,22 +400,24 @@ export function apply(ctx: Context, input: Config): void {
       const matches = belowThreshold(state)
         ? []
         : searchTools(state.catalog, query, clampLimit(args.max_results))
-      const allDiscovered = new Set(state.discovered)
       const newly: string[] = []
       for (const match of matches) {
-        if (!allDiscovered.has(match.name)) {
-          allDiscovered.add(match.name)
+        if (!state.discovered.has(match.name)) {
+          state.discovered.add(match.name)
           newly.push(match.name)
         }
       }
+      // Bound the declared surface: unbounded discovery across a long session
+      // would grow the request schemas back toward the full-resident baseline.
+      clampDiscovered(state.discovered, config.maxDiscovered)
       return {
         protocol: 'dsh-tool-search/v1',
         query,
         matches,
         discoveredTools: newly,
-        discoveredCount: allDiscovered.size,
+        discoveredCount: state.discovered.size,
         catalogTools: state.catalog.tools.size,
-        allDiscoveredTools: [...allDiscovered].sort(),
+        allDiscoveredTools: [...state.discovered].sort(),
         instruction: matches.length > 0
           ? 'Call any returned tool directly by its exact name with arguments matching the returned parameters schema.'
           : 'No tool matched. Rephrase the query with exact capability words, or consult the deferred tool catalog section of the prompt.',

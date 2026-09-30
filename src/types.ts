@@ -37,6 +37,7 @@ export interface ResolvedConfig {
   readonly alwaysVisible: readonly string[]
   readonly threshold: number
   readonly maxResults: number
+  readonly maxDiscovered: number
   readonly requireDiscovery: boolean
   readonly charactersPerToken: number
   readonly descriptionChars: number

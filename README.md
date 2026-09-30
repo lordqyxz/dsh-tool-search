@@ -34,6 +34,7 @@ The reserved run_code transport stays exempt from deferral and the guard.
 | alwaysVisible | skill, ask_user_question, report, submit_*, structured_output* | Wildcard patterns whose full schemas stay directly visible (deferrable: never) |
 | threshold | 15 | Deferred loading activates at or above this many deferrable tools |
 | maxResults | 5 | Maximum full definitions returned by one search |
+| maxDiscovered | 20 | Upper bound on tools declared after discovery; oldest discoveries yield first (floored at maxResults) |
 | requireDiscovery | true | Deny direct calls to undiscovered deferred tools |
 | charactersPerToken | 4 | Schema characters per estimated token |
 | descriptionChars | 110 | Per-tool purpose cap in the resident catalog section |

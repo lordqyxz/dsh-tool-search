@@ -205,4 +205,47 @@ describe('discovered tool declaration', () => {
     expect(names).toContain('subagent')
     expect(names).not.toContain('ssh_exec')
   })
+
+  it('caps the discovered declaration surface and evicts oldest first', async () => {
+    const registry = new Map<string, FakeDefinition>()
+    registry.set('skill', definition('skill', 'Load task-specific instructions.'))
+    // Disjoint vocabulary per tool keeps every search deterministic: one query,
+    // one match.
+    for (const word of ['alpha', 'beta', 'gamma', 'delta']) {
+      registry.set(word, definition(word, 'Execute ' + word + ' tasks with ' + word + ' steps.'))
+    }
+    const { ctx, handlers } = makeContext(registry)
+    apply(ctx as never, { threshold: 3, alwaysVisible: ['skill'], maxResults: 3, maxDiscovered: 3 })
+    const agent = makeAgent(registry)
+    const search = registry.get('tool_search')!
+    let lastValue: { discoveredCount: number } | undefined
+    for (const query of ['alpha', 'beta', 'gamma', 'delta']) {
+      const value = (await search.execute!({ query }, { agent })) as { discoveredCount: number }
+      lastValue = value
+      for (const handler of handlers.get('tools/result') ?? []) {
+        ;(handler as (exec: unknown, result: unknown) => void)({ agent, name: 'tool_search' }, {
+          isError: false,
+          value,
+        })
+      }
+    }
+    expect(lastValue!.discoveredCount).toBe(3)
+    const assemble = handlers.get('system-prompt/assemble')![0]!
+    const assembly = await (assemble as (...a: unknown[]) => Promise<{ tools: Array<{ name: string }> }>)(
+      { sections: [], tools: [] },
+      { agent },
+      async () => ({
+        sections: [],
+        tools: [...registry.values()].map(def => ({
+          name: def.name,
+          description: def.description,
+          parameters: def.parameters,
+        })),
+      }),
+    )
+    const names = assembly.tools.map(tool => tool.name)
+    expect(names).toHaveLength(5)
+    expect(names).toContain('delta')
+    expect(names).not.toContain('alpha')
+  })
 })
