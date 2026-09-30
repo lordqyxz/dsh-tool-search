@@ -150,4 +150,59 @@ describe('discovered tool declaration', () => {
     expect(names).not.toContain('subagent')
     expect(names).toContain('skill')
   })
+
+  it('restores discovery from persisted session events on resume', async () => {
+    const registry = new Map<string, FakeDefinition>()
+    registry.set('skill', definition('skill', 'Load task-specific instructions.'))
+    registry.set('subagent', definition('subagent', 'Delegate a self-contained task to a subagent.'))
+    registry.set('ssh_exec', definition('ssh_exec', 'Run a POSIX sh script on a remote host over SSH.'))
+    const { ctx, handlers } = makeContext(registry)
+    apply(ctx as never, { threshold: 2, alwaysVisible: ['skill'] })
+    // Persisted log shape: tool results are text blocks with the presentation
+    // meta carried at the event data level.
+    const agent = makeAgent(registry)
+    ;(agent.session as { snapshotEvents: () => unknown[] }).snapshotEvents = () => [
+      {
+        type: 'tool/call',
+        data: { turn: 1, step: 1, callId: 'call_1', name: 'tool_search', arguments: '{"query":"subagent"}' },
+      },
+      {
+        type: 'tool/result',
+        data: {
+          turn: 1,
+          step: 1,
+          message: {
+            role: 'tool',
+            source: { kind: 'tool', callId: 'call_1' },
+            content: [{
+              type: 'text',
+              text: JSON.stringify({
+                protocol: 'dsh-tool-search/v1',
+                query: 'subagent',
+                matches: [{ name: 'subagent' }],
+              }),
+            }],
+            isError: false,
+          },
+          meta: { protocol: 'dsh-tool-search/v1', allDiscoveredTools: ['subagent'] },
+        },
+      },
+    ]
+    const assemble = handlers.get('system-prompt/assemble')![0]!
+    const assembly = await (assemble as (...a: unknown[]) => Promise<{ tools: Array<{ name: string }> }>)(
+      { sections: [], tools: [] },
+      { agent },
+      async () => ({
+        sections: [],
+        tools: [...registry.values()].map(def => ({
+          name: def.name,
+          description: def.description,
+          parameters: def.parameters,
+        })),
+      }),
+    )
+    const names = assembly.tools.map(tool => tool.name)
+    expect(names).toContain('subagent')
+    expect(names).not.toContain('ssh_exec')
+  })
 })

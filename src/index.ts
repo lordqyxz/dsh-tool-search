@@ -153,12 +153,23 @@ function toolResultContent(message: unknown): { callId: string; isError: boolean
   if (!isRecord(message) || !isRecord(message.source) || typeof message.source.callId !== 'string') return undefined
   if (!Array.isArray(message.content) || !isRecord(message.content[0])) return undefined
   const block = message.content[0]
-  if (block.type !== 'tool-result') return undefined
-  return {
-    callId: message.source.callId,
-    isError: block.isError === true,
-    value: textContentValue(block.content),
+  if (block.type === 'tool-result') {
+    return {
+      callId: message.source.callId,
+      isError: block.isError === true,
+      value: textContentValue(block.content),
+    }
   }
+  // Persisted tool results keep the rendered text plus the presentation meta at
+  // the message level; both shapes must restore discovery state.
+  if (block.type === 'text') {
+    return {
+      callId: message.source.callId,
+      isError: message.isError === true,
+      value: parseJson(block.text),
+    }
+  }
+  return undefined
 }
 
 function nestedDispatch(event: unknown): { name: string; content: unknown } | undefined {
