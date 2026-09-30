@@ -429,10 +429,28 @@ export function apply(ctx: Context, input: Config): void {
     if (deferred.size > 0) {
       sections.push({ name: 'tool-search:catalog', text: catalogSectionText(state.catalog, config) })
     }
+    const tools = resolved.tools.filter(schema => visibleNames.has(schema.name))
+    if (deferred.size > 0) {
+      // Discovered schemas must be declared in the request surface: a model can
+      // only emit native calls for tools it sees as declarations, so schemas
+      // returned as search-result text alone are not callable. The loop logs
+      // the declaration change (tool-addition) for these names on its own.
+      const declared = new Set(tools.map(schema => schema.name))
+      for (const name of state.discovered) {
+        if (declared.has(name)) continue
+        const definition = state.agent.ctx.tools.get(name, state.agent)
+        if (definition === undefined) continue
+        tools.push({
+          name: definition.name,
+          description: definition.description,
+          parameters: definition.parameters,
+        })
+      }
+    }
     return {
       ...resolved,
       sections,
-      tools: resolved.tools.filter(schema => visibleNames.has(schema.name)),
+      tools,
     }
   }, { prepend: true })
 
